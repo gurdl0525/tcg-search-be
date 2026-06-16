@@ -1,0 +1,35 @@
+spring:
+  config:
+    activate:
+      on-profile: swagger
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+    version: openapi_3_1
+
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+    disable-swagger-default-url: true
+    display-request-duration: true
+    doc-expansion: none
+    filter: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
+  cache:
+    disabled: true
+
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+  packages-to-scan:
+    - com.tcgsearch
+  paths-to-match:
+    - /api/**
+  paths-to-exclude:
+    - /actuator/**
+  show-actuator: false
+  writer-with-default-pretty-printer: true

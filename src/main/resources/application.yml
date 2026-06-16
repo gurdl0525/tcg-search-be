@@ -1,0 +1,14 @@
+spring:
+  profiles:
+    group:
+      local: "local, swagger"
+      stag: "datasource, management, swagger"
+      prod: "datasource, management, swagger"
+
+  # format
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+  # metadata
+  application:
+    name: tcg-search
