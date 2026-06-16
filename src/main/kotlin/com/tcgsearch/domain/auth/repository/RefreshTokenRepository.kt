@@ -1,14 +1,17 @@
 package com.tcgsearch.domain.auth.repository
 
 import com.tcgsearch.domain.auth.entity.RefreshToken
-import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.stereotype.Repository
+import com.tcgsearch.global.annotation.RequiredTransactional
+import org.springframework.data.repository.Repository
 import java.util.*
 
-@Repository
-interface RefreshTokenRepository : JpaRepository<RefreshToken, UUID>, CustomRefreshTokenRepository {
+@org.springframework.stereotype.Repository
+interface RefreshTokenRepository : Repository<RefreshToken, UUID>, CustomRefreshTokenRepository {
 
     fun existsByTokenHash(tokenHash: String): Boolean
 
     fun findByTokenHash(tokenHash: String): RefreshToken?
+
+    @RequiredTransactional
+    fun save(token: RefreshToken): RefreshToken
 }

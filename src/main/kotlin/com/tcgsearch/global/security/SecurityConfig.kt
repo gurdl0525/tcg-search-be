@@ -1,12 +1,14 @@
 package com.tcgsearch.global.security
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.tcgsearch.global.filter.FilterConfig
 import com.tcgsearch.global.property.SecurityCorsProperties
-import com.tcgsearch.global.property.SecurityJwtProperties
+import com.tcgsearch.global.property.JwtProperties
+import com.tcgsearch.global.util.TokenProvider
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
-import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -25,8 +27,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
  */
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(SecurityCorsProperties::class, SecurityJwtProperties::class)
-class SecurityConfig(private val corsProperties: SecurityCorsProperties) {
+@EnableConfigurationProperties(SecurityCorsProperties::class, JwtProperties::class)
+class SecurityConfig(
+    private val corsProperties: SecurityCorsProperties,
+    private val tokenProvider: TokenProvider,
+    private val objectMapper: ObjectMapper,
+) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain =
         http
@@ -57,7 +63,7 @@ class SecurityConfig(private val corsProperties: SecurityCorsProperties) {
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().denyAll()
             }
-            .apply {  }
+            .apply { FilterConfig(tokenProvider, objectMapper) }
             .build()
 
     private fun corsConfigurationSource(): CorsConfigurationSource {
