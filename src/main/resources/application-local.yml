@@ -1,0 +1,45 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  # migration
+  flyway:
+    enabled: true
+
+  # DB
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    username: tcg_search
+    password: tcg_search
+    url: jdbc:postgresql://localhost:5432/tcg_search
+
+  # ORM
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
+        use_sql_comments: true
+
+# management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,heapdump,shutdown
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+    heapdump:
+      access: read_only
+
+    shutdown:
+      access: read_only
