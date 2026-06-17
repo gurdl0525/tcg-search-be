@@ -3,6 +3,7 @@ package com.tcgsearch.global.security
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import com.tcgsearch.global.property.JwtProperties
 import com.tcgsearch.global.property.SecurityCorsProperties
+import jakarta.servlet.DispatcherType
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -64,6 +65,7 @@ class SecurityConfig(
             // 인증 설정
             .authorizeHttpRequests { authorize ->
                 authorize
+                    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(
                         "/actuator/health",
