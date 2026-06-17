@@ -32,6 +32,9 @@ class User(
     @Column(name = "provider_subject", nullable = false)
     var providerSubject: String,
 
+    @Column(name = "password_hash")
+    var passwordHash: String? = null,
+
     @Column(nullable = false)
     var role: String = "USER",
 

@@ -1,0 +1,6 @@
+app:
+  auth:
+    jwt:
+      issuer: "tcg-search-test"
+      secret: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+      access-token-ttl: 15m

@@ -14,9 +14,11 @@ import kotlin.test.assertTrue
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.transaction.annotation.Transactional
 
 @Import(TestcontainersConfiguration::class)
 @SpringBootTest
+@Transactional
 class RefreshTokenRepositoryTests(
     @Autowired private val appUsers: UserRepository,
     @Autowired private val refreshTokens: RefreshTokenRepository,
