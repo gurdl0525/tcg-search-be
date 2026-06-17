@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import org.hamcrest.Matchers.hasItem
 
 @Import(TestcontainersConfiguration::class)
 @SpringBootTest
@@ -187,6 +188,36 @@ class AuthApiTests(
                 .andExpect(status().isBadRequest)
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
         }
+    }
+
+    @Test
+    fun `signup validation groups field errors by field name with exception names`() {
+        mockMvc
+            .perform(
+                post("/api/auth/signup")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "id": "ABC",
+                          "password": "password123!",
+                          "device_id": "ios-primary"
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+            .andExpect(jsonPath("$.field_error.id").isArray)
+            .andExpect(jsonPath("$.field_error.id[*].message", hasItem("must be between 4 and 20 characters.")))
+            .andExpect(
+                jsonPath(
+                    "$.field_error.id[*].message",
+                    hasItem("must be 4 to 20 lowercase letters, numbers, dots, or underscores and start/end with a letter or number."),
+                ),
+            )
+            .andExpect(jsonPath("$.field_error.id[*].exception", hasItem("SizeException")))
+            .andExpect(jsonPath("$.field_error.id[*].exception", hasItem("RegexException")))
     }
 
     @Test

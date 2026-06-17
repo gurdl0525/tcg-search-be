@@ -4,7 +4,6 @@ import com.tcgsearch.global.error.exception.BaseException
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.BindException
-import org.springframework.validation.FieldError
 
 data class ErrorResponse(
     val code: String,
@@ -18,10 +17,7 @@ data class ErrorResponse(
             status = e.errorCode.status,
         )
 
-        fun of(e: BindException) = ValidationErrorResponse(
-            HttpStatus.BAD_REQUEST,
-            e.fieldErrors.map { it: FieldError -> mapOf(Pair(it.field, it.defaultMessage)) }
-        )
+        fun of(e: BindException) = ValidationErrorResponse.of(e.fieldErrors)
 
         fun of(e: HttpMessageNotReadableException) = ErrorResponse(
             "ETC",
