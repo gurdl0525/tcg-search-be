@@ -1,25 +1,83 @@
 package com.tcgsearch.domain.auth.service
 
+import com.tcgsearch.domain.auth.dto.request.LoginRequest
+import com.tcgsearch.domain.auth.dto.request.SignUpRequest
 import com.tcgsearch.domain.auth.dto.response.TokenResponse
 import com.tcgsearch.domain.auth.repository.RefreshTokenRepository
+import com.tcgsearch.domain.user.entity.User
+import com.tcgsearch.domain.user.repository.UserRepository
 import com.tcgsearch.global.error.ErrorCode
 import com.tcgsearch.global.error.exception.BaseException
 import com.tcgsearch.global.property.RefreshTokenProperties
 import com.tcgsearch.global.util.RefreshTokenHasher
-import com.tcgsearch.global.util.TokenProvider
+import com.tcgsearch.global.util.TokenIssuer
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.util.UUID
 
 @Service
 @EnableConfigurationProperties(RefreshTokenProperties::class)
 class AuthServiceImpl(
     private val refreshTokenHasher: RefreshTokenHasher,
     private val refreshTokenRepository: RefreshTokenRepository,
-    private val jwtProvider: TokenProvider,
+    private val users: UserRepository,
+    private val passwordEncoder: PasswordEncoder,
+    private val tokenIssuer: TokenIssuer,
 ): AuthService {
+
+    @Transactional(rollbackFor = [Exception::class])
+    override fun signUp(request: SignUpRequest): TokenResponse {
+        val loginId = request.id!!.trim()
+
+        if (
+            users.existsByAuthProviderAndProviderSubject(LOCAL_AUTH_PROVIDER, loginId) ||
+            users.existsByEmail(loginId)
+        ) {
+            throw BaseException(ErrorCode.DUPLICATE_USER_ID)
+        }
+
+        val user = users.save(
+            User(
+                email = loginId,
+                displayName = loginId,
+                authProvider = LOCAL_AUTH_PROVIDER,
+                providerSubject = loginId,
+                passwordHash = passwordEncoder.encode(request.password!!),
+            ),
+        )
+
+        return tokenIssuer.createTokenPair(
+            user = user,
+            deviceId = request.deviceId!!.trim(),
+            tokenFamilyId = UUID.randomUUID(),
+            now = Instant.now(),
+        )
+    }
+
+    @Transactional(rollbackFor = [Exception::class])
+    override fun login(request: LoginRequest): TokenResponse {
+        val user = users.findByAuthProviderAndProviderSubject(
+            authProvider = LOCAL_AUTH_PROVIDER,
+            providerSubject = request.id!!.trim(),
+        ) ?: throw BaseException(ErrorCode.INVALID_LOGIN_CREDENTIALS)
+
+        val passwordHash = user.passwordHash ?: throw BaseException(ErrorCode.INVALID_LOGIN_CREDENTIALS)
+
+        if (!user.enabled || !passwordEncoder.matches(request.password!!, passwordHash)) {
+            throw BaseException(ErrorCode.INVALID_LOGIN_CREDENTIALS)
+        }
+
+        return tokenIssuer.createTokenPair(
+            user = user,
+            deviceId = request.deviceId!!.trim(),
+            tokenFamilyId = UUID.randomUUID(),
+            now = Instant.now(),
+        )
+    }
 
     /**
      * 리프레쉬 토큰으로 새 토큰 발급
@@ -33,16 +91,18 @@ class AuthServiceImpl(
         val current = refreshTokenRepository.findByTokenHash(refreshTokenHasher.hash(rawRefreshToken))
             ?: throw BaseException(ErrorCode.INVALID_REFRESH_TOKEN)
 
-        current.takeIf { it.isUsable(now) }?.apply {
-            this.revokedAt = now
-            this.rotatedAt = now
-            this.updatedAt = now
-        } ?: {
+        if (!current.isUsable(now)) {
             refreshTokenRepository.revokeFamily(current.tokenFamilyId, now)
             throw BaseException(ErrorCode.INVALID_REFRESH_TOKEN)
         }
 
-        return jwtProvider.createTokenPair(
+        current.apply {
+            revokedAt = now
+            rotatedAt = now
+            updatedAt = now
+        }
+
+        return tokenIssuer.createTokenPair(
             user = current.user,
             deviceId = current.deviceId,
             tokenFamilyId = current.tokenFamilyId,
@@ -63,5 +123,9 @@ class AuthServiceImpl(
             this.revokedAt = now
             this.updatedAt = now
         }
+    }
+
+    private companion object {
+        const val LOCAL_AUTH_PROVIDER = "local"
     }
 }

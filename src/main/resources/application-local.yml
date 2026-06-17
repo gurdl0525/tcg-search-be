@@ -22,8 +22,8 @@ spring:
     properties:
       hibernate:
         show_sql: true
-        format_sql: true
-        use_sql_comments: true
+        format_sql: false
+        use_sql_comments: false
 
 app:
   security:
@@ -37,7 +37,7 @@ app:
   auth:
     jwt:
       issuer: "http://localhost:8080"
-      secret: ${SECURITY_JWT_SECRET:tcg-search-local-development-secret-change-before-production}
+      secret: ${SECURITY_JWT_SECRET}
       access-token-ttl: 15m
     refresh-token:
       ttl: 30d

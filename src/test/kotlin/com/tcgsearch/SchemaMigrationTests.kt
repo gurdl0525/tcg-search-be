@@ -45,7 +45,7 @@ class SchemaMigrationTests(
 			from information_schema.columns
 			where table_schema = 'public'
 			  and table_name = 'app_users'
-			  and column_name in ('auth_provider', 'provider_subject', 'role', 'enabled')
+			  and column_name in ('auth_provider', 'provider_subject', 'password_hash', 'role', 'enabled')
 			""".trimIndent(),
 			String::class.java,
 		).toSet()
@@ -70,7 +70,7 @@ class SchemaMigrationTests(
 			String::class.java,
 		).toSet()
 
-		assertEquals(setOf("auth_provider", "provider_subject", "role", "enabled"), userColumnNames)
+		assertEquals(setOf("auth_provider", "provider_subject", "password_hash", "role", "enabled"), userColumnNames)
 		assertEquals(
 			setOf(
 				"user_id",

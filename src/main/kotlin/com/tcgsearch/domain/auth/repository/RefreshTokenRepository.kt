@@ -10,6 +10,8 @@ interface RefreshTokenRepository : Repository<RefreshToken, UUID>, CustomRefresh
 
     fun existsByTokenHash(tokenHash: String): Boolean
 
+    fun findById(id: UUID): RefreshToken?
+
     fun findByTokenHash(tokenHash: String): RefreshToken?
 
     @RequiredTransactional

@@ -19,13 +19,13 @@ class ExceptionHandler {
         .body(ErrorResponse.of(ex))
 
     @ExceptionHandler(BindException::class)
-    private fun handleBindException(ex: BaseException) = ResponseEntity
-        .status(ex.errorCode.status)
+    private fun handleBindException(ex: BindException) = ResponseEntity
+        .badRequest()
         .body(ErrorResponse.of(ex))
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     private fun handleMethodArgNotValid(ex: MethodArgumentNotValidException) = ResponseEntity
-        .status(HttpStatus.METHOD_NOT_ALLOWED)
+        .badRequest()
         .body(ErrorResponse.of(ex))
 
     @ExceptionHandler(ValidationException::class)
