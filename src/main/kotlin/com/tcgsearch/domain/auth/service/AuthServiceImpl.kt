@@ -8,7 +8,7 @@ import com.tcgsearch.domain.user.entity.User
 import com.tcgsearch.domain.user.repository.UserRepository
 import com.tcgsearch.global.error.ErrorCode
 import com.tcgsearch.global.error.exception.BaseException
-import com.tcgsearch.global.property.RefreshTokenProperties
+import com.tcgsearch.global.property.jwt.RefreshTokenProperties
 import com.tcgsearch.global.util.RefreshTokenHasher
 import com.tcgsearch.global.util.TokenIssuer
 import org.springframework.boot.context.properties.EnableConfigurationProperties

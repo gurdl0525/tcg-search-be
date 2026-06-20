@@ -4,8 +4,8 @@ import com.tcgsearch.domain.auth.dto.response.TokenResponse
 import com.tcgsearch.domain.auth.entity.RefreshToken
 import com.tcgsearch.domain.auth.repository.RefreshTokenRepository
 import com.tcgsearch.domain.user.entity.User
-import com.tcgsearch.global.property.JwtProperties
-import com.tcgsearch.global.property.RefreshTokenProperties
+import com.tcgsearch.global.property.jwt.JwtProperties
+import com.tcgsearch.global.property.jwt.RefreshTokenProperties
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64

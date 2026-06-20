@@ -5,7 +5,7 @@ import com.tcgsearch.domain.auth.entity.RefreshToken
 import com.tcgsearch.domain.auth.repository.RefreshTokenRepository
 import com.tcgsearch.domain.user.entity.User
 import com.tcgsearch.domain.user.repository.UserRepository
-import com.tcgsearch.global.property.JwtProperties
+import com.tcgsearch.global.property.jwt.JwtProperties
 import com.tcgsearch.global.util.RefreshTokenHasher
 import com.tcgsearch.global.util.TokenIssuer
 import java.time.Instant

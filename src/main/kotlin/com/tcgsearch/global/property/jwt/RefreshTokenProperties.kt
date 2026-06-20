@@ -1,4 +1,4 @@
-package com.tcgsearch.global.property
+package com.tcgsearch.global.property.jwt
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 import java.time.Duration
