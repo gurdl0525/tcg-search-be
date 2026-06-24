@@ -18,5 +18,39 @@ services:
     labels:
       org.springframework.boot.service-connection: postgres
 
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: tcg-search-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tcg_search}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tcg_search_minio}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-create-bucket:
+    image: quay.io/minio/mc:latest
+    container_name: tcg-search-minio-create-bucket
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tcg_search}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tcg_search_minio}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tcg-search-local}
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "mc alias set local http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\" &&
+      mc mb --ignore-existing \"local/$${MINIO_BUCKET}\""
+
 volumes:
   postgres_data:
+  minio_data:
