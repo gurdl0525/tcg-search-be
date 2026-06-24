@@ -2,6 +2,7 @@ package com.tcgsearch.global.error.handler
 
 import com.tcgsearch.global.error.exception.BaseException
 import com.tcgsearch.global.error.response.ErrorResponse
+import jakarta.validation.ConstraintViolationException
 import jakarta.xml.bind.ValidationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -10,6 +11,7 @@ import org.springframework.validation.BindException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.HandlerMethodValidationException
 
 @RestControllerAdvice
 class ExceptionHandler {
@@ -25,6 +27,16 @@ class ExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     private fun handleMethodArgNotValid(ex: MethodArgumentNotValidException) = ResponseEntity
+        .badRequest()
+        .body(ErrorResponse.of(ex))
+
+    @ExceptionHandler(HandlerMethodValidationException::class)
+    private fun handleHandlerMethodValidationException(ex: HandlerMethodValidationException) = ResponseEntity
+        .badRequest()
+        .body(ErrorResponse.of(ex))
+
+    @ExceptionHandler(ConstraintViolationException::class)
+    private fun handleConstraintViolationException(ex: ConstraintViolationException) = ResponseEntity
         .badRequest()
         .body(ErrorResponse.of(ex))
 

@@ -62,10 +62,10 @@ class SecurityConfigurationTests(
 	}
 
 	@Test
-	fun `jwt authenticated api request passes security`() {
+	fun `jwt authenticated unknown api request reaches mvc routing`() {
 		mockMvc
 			.perform(
-				get("/api/cards")
+				get("/api/security-test/missing")
 					.header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}"),
 			)
 			.andExpect(status().isNotFound)

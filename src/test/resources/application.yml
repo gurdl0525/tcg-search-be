@@ -1,4 +1,20 @@
+spring:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
 app:
+  storage:
+    object:
+      images:
+        enabled: true
+        endpoint: "http://localhost:9000"
+        public-endpoint: "http://localhost:9000"
+        bucket: "tcg-search-local"
+        access-key: "tcg_search"
+        secret-key: "tcg_search_minio"
+        region: "us-east-1"
+        presign-ttl: 15m
+
   auth:
     jwt:
       issuer: "tcg-search-test"

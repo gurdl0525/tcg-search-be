@@ -1,9 +1,11 @@
 package com.tcgsearch.global.error.response
 
 import com.tcgsearch.global.error.exception.BaseException
+import jakarta.validation.ConstraintViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.BindException
+import org.springframework.web.method.annotation.HandlerMethodValidationException
 
 data class ErrorResponse(
     val code: String,
@@ -18,6 +20,10 @@ data class ErrorResponse(
         )
 
         fun of(e: BindException) = ValidationErrorResponse.of(e.fieldErrors)
+
+        fun of(e: HandlerMethodValidationException) = ValidationErrorResponse.of(e)
+
+        fun of(e: ConstraintViolationException) = ValidationErrorResponse.of(e)
 
         fun of(e: HttpMessageNotReadableException) = ErrorResponse(
             "ETC",

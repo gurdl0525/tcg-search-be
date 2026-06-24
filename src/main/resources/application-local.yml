@@ -42,6 +42,18 @@ app:
     refresh-token:
       ttl: 30d
 
+  storage:
+    object:
+      images:
+        enabled: true
+        endpoint: "http://localhost:9000"
+        public-endpoint: "http://localhost:9000"
+        bucket: "tcg-search-local"
+        access-key: ${MINIO_ROOT_USER:tcg_search}
+        secret-key: ${MINIO_ROOT_PASSWORD:tcg_search_minio}
+        region: "us-east-1"
+        presign-ttl: 15m
+
 # management
 management:
   endpoints:
