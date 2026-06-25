@@ -57,6 +57,7 @@ class CardSearchApiTests(
                 get("/api/cards")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}")
                     .param("search_word", "luffy")
+                    .param("language_code", "en")
                     .param("page", "0")
                     .param("size", "1")
                     .param("sort_by", "variant_name")
@@ -87,6 +88,7 @@ class CardSearchApiTests(
                     .param("color", "red")
                     .param("rarity", "L")
                     .param("card_set", "OP-01")
+                    .param("language_code", "en")
                     .param("is_parallel", "true"),
             )
             .andExpect(status().isOk)
@@ -107,6 +109,7 @@ class CardSearchApiTests(
             "size" to "101",
             "sort_by" to "unknown",
             "sort" to "DOWN",
+            "language_code" to "ja",
         ).forEach { (name, value) ->
             mockMvc
                 .perform(
@@ -118,6 +121,41 @@ class CardSearchApiTests(
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.field_error.$name").isArray)
         }
+    }
+
+    @Test
+    fun `search cards returns requested language translation without overwriting other languages`() {
+        seedMultilingualLuffyPrinting()
+
+        mockMvc
+            .perform(
+                get("/api/cards")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}")
+                    .param("search_word", "ルフィ")
+                    .param("language_code", "jp"),
+            )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_elements").value(1))
+            .andExpect(jsonPath("$.content[0].card_no").value("OP01-001"))
+            .andExpect(jsonPath("$.content[0].name").value("モンキー・D・ルフィ"))
+            .andExpect(jsonPath("$.content[0].effect_text").value("日本語の効果"))
+            .andExpect(jsonPath("$.content[0].card_set.name").value("ROMANCE DAWN 日本語"))
+            .andExpect(jsonPath("$.content[0].language_code").value("jp"))
+
+        mockMvc
+            .perform(
+                get("/api/cards")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}")
+                    .param("search_word", "Luffy")
+                    .param("language_code", "en"),
+            )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_elements").value(1))
+            .andExpect(jsonPath("$.content[0].card_no").value("OP01-001"))
+            .andExpect(jsonPath("$.content[0].name").value("Monkey.D.Luffy"))
+            .andExpect(jsonPath("$.content[0].effect_text").value("English effect text"))
+            .andExpect(jsonPath("$.content[0].card_set.name").value("ROMANCE DAWN English"))
+            .andExpect(jsonPath("$.content[0].language_code").value("en"))
     }
 
     private fun seedLuffyPrintings() {
@@ -140,6 +178,21 @@ class CardSearchApiTests(
             effectText = "Green filter fixture.",
         )
 
+        insertCardIdentityTranslation(
+            identityId = identityId,
+            languageCode = "en",
+            name = "Monkey.D.Luffy",
+            effectText = "[DON!! x2] This Leader gains +1000 power.",
+            triggerText = null,
+        )
+        insertCardIdentityTranslation(
+            identityId = greenIdentityId,
+            languageCode = "en",
+            name = "Green Test Leader",
+            effectText = "Green filter fixture.",
+            triggerText = null,
+        )
+        insertCardSetTranslation(cardSetId, "en", "ROMANCE DAWN")
         jdbcTemplate.update(
             "insert into card_identity_colors (card_identity_id, color_id) values (?, ?)",
             identityId,
@@ -183,6 +236,54 @@ class CardSearchApiTests(
             variantName = "green-parallel",
             isParallel = true,
             imageUrl = "https://cdn.example.test/op01-999-parallel.png",
+        )
+    }
+
+    private fun seedMultilingualLuffyPrinting() {
+        val strikeAttributeId = findId("select id from attributes where name = ?", "Strike")
+        val leaderRarityId = findId("select id from rarities where code = ?", "L")
+        val cardSetId = insertCardSet()
+        val identityId = insertCardIdentity(
+            attributeId = strikeAttributeId,
+            cardNo = "OP01-001",
+            name = "canonical OP01-001",
+            effectText = "canonical effect should not be returned",
+        )
+
+        insertCardIdentityTranslation(
+            identityId = identityId,
+            languageCode = "jp",
+            name = "モンキー・D・ルフィ",
+            effectText = "日本語の効果",
+            triggerText = null,
+        )
+        insertCardIdentityTranslation(
+            identityId = identityId,
+            languageCode = "en",
+            name = "Monkey.D.Luffy",
+            effectText = "English effect text",
+            triggerText = null,
+        )
+        insertCardSetTranslation(cardSetId, "jp", "ROMANCE DAWN 日本語")
+        insertCardSetTranslation(cardSetId, "en", "ROMANCE DAWN English")
+
+        insertCardPrinting(
+            identityId = identityId,
+            cardSetId = cardSetId,
+            rarityId = leaderRarityId,
+            variantName = "standard-jp",
+            isParallel = false,
+            imageUrl = "https://cdn.example.test/jp/op01-001.png",
+            languageCode = "jp",
+        )
+        insertCardPrinting(
+            identityId = identityId,
+            cardSetId = cardSetId,
+            rarityId = leaderRarityId,
+            variantName = "standard-en",
+            isParallel = false,
+            imageUrl = "https://cdn.example.test/en/op01-001.png",
+            languageCode = "en",
         )
     }
 
@@ -243,6 +344,7 @@ class CardSearchApiTests(
         variantName: String,
         isParallel: Boolean,
         imageUrl: String,
+        languageCode: String = "en",
     ): UUID =
         insertReturningId(
             """
@@ -263,19 +365,61 @@ class CardSearchApiTests(
             identityId,
             cardSetId,
             rarityId,
-            "en",
+            languageCode,
             "global",
             variantName,
             isParallel,
             imageUrl,
-            "https://en.onepiece-cardgame.com/cardlist/",
+            "https://onepiece-cardgame.com/cardlist/",
+        )
+
+    private fun insertCardIdentityTranslation(
+        identityId: UUID,
+        languageCode: String,
+        name: String,
+        effectText: String,
+        triggerText: String?,
+    ): UUID =
+        insertReturningId(
+            """
+            insert into card_identity_translations (
+                card_identity_id,
+                language_code,
+                name,
+                effect_text,
+                trigger_text
+            )
+            values (?, ?, ?, ?, ?)
+            returning id
+            """.trimIndent(),
+            identityId,
+            languageCode,
+            name,
+            effectText,
+            triggerText,
+        )
+
+    private fun insertCardSetTranslation(
+        cardSetId: UUID,
+        languageCode: String,
+        name: String,
+    ): UUID =
+        insertReturningId(
+            """
+            insert into card_set_translations (card_set_id, language_code, name)
+            values (?, ?, ?)
+            returning id
+            """.trimIndent(),
+            cardSetId,
+            languageCode,
+            name,
         )
 
     private fun findId(sql: String, vararg args: Any): UUID =
         jdbcTemplate.queryForObject(sql, UUID::class.java, *args)
             ?: error("id not found")
 
-    private fun insertReturningId(sql: String, vararg args: Any): UUID =
+    private fun insertReturningId(sql: String, vararg args: Any?): UUID =
         jdbcTemplate.queryForObject(sql, UUID::class.java, *args)
             ?: error("id was not returned")
 

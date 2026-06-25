@@ -38,7 +38,7 @@ app:
     jwt:
       issuer: "http://localhost:8080"
       secret: ${SECURITY_JWT_SECRET}
-      access-token-ttl: 15m
+      access-token-ttl: 7d
     refresh-token:
       ttl: 30d
 
