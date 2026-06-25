@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam
 private const val SORT_BY_PATTERN =
     "card_no|name|card_type|cost|life|power|counter|block_no|rarity|card_set|variant_name|is_parallel|created_at"
 private const val SORT_PATTERN = "(?i)ASC|DESC"
+private const val LANGUAGE_CODE_PATTERN = "jp|en|ko"
 
 /**
  * 카드 검색 API 요청을 처리합니다.
@@ -68,8 +69,8 @@ class CardController(
         @RequestParam(name = "attribute", required = false) attributes: List<String>?,
         @RequestParam(name = "is_parallel", required = false) isParallel: Boolean?,
 
-        @Size(max = 20, message = "must be at most 20 characters.")
-        @RequestParam(name = "language_code", required = false) languageCode: String?,
+        @Pattern(regexp = LANGUAGE_CODE_PATTERN, message = "must be jp, en, or ko.")
+        @RequestParam(name = "language_code", defaultValue = "jp") languageCode: String,
 
         @Size(max = 20, message = "must be at most 20 characters.")
         @RequestParam(name = "region_code", required = false) regionCode: String?,
@@ -96,7 +97,7 @@ class CardController(
             traits = traits.toTokens(),
             attributes = attributes.toTokens(),
             isParallel = isParallel,
-            languageCode = languageCode?.trim()?.takeIf { it.isNotEmpty() },
+            languageCode = languageCode.trim().takeIf { it.isNotEmpty() },
             regionCode = regionCode?.trim()?.takeIf { it.isNotEmpty() },
             illustrationTypes = illustrationTypes.toTokens(),
             foilTreatments = foilTreatments.toTokens(),

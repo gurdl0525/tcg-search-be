@@ -1,16 +1,25 @@
 package com.tcgsearch.domain.card.repository
 
 import com.querydsl.core.BooleanBuilder
+import com.querydsl.core.Tuple
 import com.querydsl.core.types.Order
 import com.querydsl.core.types.OrderSpecifier
 import com.querydsl.jpa.JPAExpressions
 import com.querydsl.jpa.impl.JPAQuery
 import com.querydsl.jpa.impl.JPAQueryFactory
 import com.tcgsearch.domain.card.entity.CardPrinting
+import com.tcgsearch.domain.card.entity.QCardAttributeTranslation
+import com.tcgsearch.domain.card.entity.QCardAttributeTranslation.cardAttributeTranslation
 import com.tcgsearch.domain.card.entity.QCardIdentity.cardIdentity
 import com.tcgsearch.domain.card.entity.QCardIdentityColor.cardIdentityColor
 import com.tcgsearch.domain.card.entity.QCardIdentityTrait.cardIdentityTrait
+import com.tcgsearch.domain.card.entity.QCardIdentityTranslation
+import com.tcgsearch.domain.card.entity.QCardIdentityTranslation.cardIdentityTranslation
 import com.tcgsearch.domain.card.entity.QCardPrinting.cardPrinting
+import com.tcgsearch.domain.card.entity.QCardSetTranslation
+import com.tcgsearch.domain.card.entity.QCardSetTranslation.cardSetTranslation
+import com.tcgsearch.domain.card.entity.QCardTraitTranslation
+import com.tcgsearch.domain.card.entity.QCardTraitTranslation.cardTraitTranslation
 import java.util.UUID
 import org.springframework.stereotype.Repository
 
@@ -29,7 +38,7 @@ class CustomCardPrintingRepositoryImpl(
             .fetch()
 
         return CardPrintingSearchResult(
-            rows = printings.toRows(),
+            rows = printings.toRows(condition.languageCode),
             totalElements = totalElements,
         )
     }
@@ -41,16 +50,61 @@ class CustomCardPrintingRepositoryImpl(
             .join(cardPrinting.cardIdentity, cardIdentity)
             .join(cardPrinting.cardSet)
             .leftJoin(cardPrinting.rarity)
+            .leftJoin(cardIdentityTranslation).on(
+                cardIdentityTranslation.cardIdentity.eq(cardIdentity)
+                    .and(cardIdentityTranslation.languageCode.eq(cardPrinting.languageCode)),
+            )
+            .leftJoin(jpCardIdentityTranslation).on(
+                jpCardIdentityTranslation.cardIdentity.eq(cardIdentity)
+                    .and(jpCardIdentityTranslation.languageCode.eq(DEFAULT_LANGUAGE_CODE)),
+            )
             .where(predicate)
             .fetchOne() ?: 0L
 
-    private fun contentQuery(predicate: BooleanBuilder): JPAQuery<CardPrinting> =
+    private fun contentQuery(predicate: BooleanBuilder): JPAQuery<Tuple> =
         queryFactory
-            .selectFrom(cardPrinting)
+            .select(
+                cardPrinting,
+                cardIdentityTranslation.name,
+                cardIdentityTranslation.effectText,
+                cardIdentityTranslation.triggerText,
+                jpCardIdentityTranslation.name,
+                jpCardIdentityTranslation.effectText,
+                jpCardIdentityTranslation.triggerText,
+                cardSetTranslation.name,
+                jpCardSetTranslation.name,
+                cardAttributeTranslation.name,
+                jpCardAttributeTranslation.name,
+            )
+            .from(cardPrinting)
             .join(cardPrinting.cardIdentity, cardIdentity).fetchJoin()
             .join(cardPrinting.cardSet).fetchJoin()
             .leftJoin(cardPrinting.rarity).fetchJoin()
             .leftJoin(cardIdentity.attribute).fetchJoin()
+            .leftJoin(cardIdentityTranslation).on(
+                cardIdentityTranslation.cardIdentity.eq(cardIdentity)
+                    .and(cardIdentityTranslation.languageCode.eq(cardPrinting.languageCode)),
+            )
+            .leftJoin(jpCardIdentityTranslation).on(
+                jpCardIdentityTranslation.cardIdentity.eq(cardIdentity)
+                    .and(jpCardIdentityTranslation.languageCode.eq(DEFAULT_LANGUAGE_CODE)),
+            )
+            .leftJoin(cardSetTranslation).on(
+                cardSetTranslation.cardSet.eq(cardPrinting.cardSet)
+                    .and(cardSetTranslation.languageCode.eq(cardPrinting.languageCode)),
+            )
+            .leftJoin(jpCardSetTranslation).on(
+                jpCardSetTranslation.cardSet.eq(cardPrinting.cardSet)
+                    .and(jpCardSetTranslation.languageCode.eq(DEFAULT_LANGUAGE_CODE)),
+            )
+            .leftJoin(cardAttributeTranslation).on(
+                cardAttributeTranslation.attribute.eq(cardIdentity.attribute)
+                    .and(cardAttributeTranslation.languageCode.eq(cardPrinting.languageCode)),
+            )
+            .leftJoin(jpCardAttributeTranslation).on(
+                jpCardAttributeTranslation.attribute.eq(cardIdentity.attribute)
+                    .and(jpCardAttributeTranslation.languageCode.eq(DEFAULT_LANGUAGE_CODE)),
+            )
             .where(predicate)
 
     private fun predicate(condition: CardPrintingSearchCondition): BooleanBuilder {
@@ -59,9 +113,12 @@ class CustomCardPrintingRepositoryImpl(
         condition.searchWord?.let { searchWord ->
             builder.and(
                 cardIdentity.cardNo.containsIgnoreCase(searchWord)
-                    .or(cardIdentity.name.containsIgnoreCase(searchWord))
-                    .or(cardIdentity.effectText.containsIgnoreCase(searchWord))
-                    .or(cardIdentity.triggerText.containsIgnoreCase(searchWord)),
+                    .or(cardIdentityTranslation.name.containsIgnoreCase(searchWord))
+                    .or(cardIdentityTranslation.effectText.containsIgnoreCase(searchWord))
+                    .or(cardIdentityTranslation.triggerText.containsIgnoreCase(searchWord))
+                    .or(jpCardIdentityTranslation.name.containsIgnoreCase(searchWord))
+                    .or(jpCardIdentityTranslation.effectText.containsIgnoreCase(searchWord))
+                    .or(jpCardIdentityTranslation.triggerText.containsIgnoreCase(searchWord)),
             )
         }
         condition.cardTypes.takeIf { it.isNotEmpty() }?.let {
@@ -127,7 +184,7 @@ class CustomCardPrintingRepositoryImpl(
     private fun orderSpecifiers(condition: CardPrintingSearchCondition): Array<OrderSpecifier<*>> {
         val order = if (condition.sort == DESC) Order.DESC else Order.ASC
         val primary = when (condition.sortBy.lowercase()) {
-            "name" -> OrderSpecifier(order, cardIdentity.name)
+            "name" -> OrderSpecifier(order, cardIdentityTranslation.name)
             "card_type" -> OrderSpecifier(order, cardIdentity.cardType)
             "cost" -> OrderSpecifier(order, cardIdentity.cost)
             "life" -> OrderSpecifier(order, cardIdentity.life)
@@ -148,18 +205,22 @@ class CustomCardPrintingRepositoryImpl(
         )
     }
 
-    private fun List<CardPrinting>.toRows(): List<CardPrintingSearchRow> {
+    private fun List<Tuple>.toRows(languageCode: String?): List<CardPrintingSearchRow> {
         if (isEmpty()) {
             return emptyList()
         }
 
-        val identityIds = map { printing ->
+        val printings = map { tuple ->
+            requireNotNull(tuple.get(cardPrinting)) { "card printing must exist" }
+        }
+        val identityIds = printings.map { printing ->
             requireNotNull(printing.cardIdentity.id) { "card identity id must exist" }
         }.toSet()
         val colorsByIdentityId = colorsByIdentityId(identityIds)
-        val traitsByIdentityId = traitsByIdentityId(identityIds)
+        val traitsByIdentityId = traitsByIdentityId(identityIds, languageCode)
 
-        return map { printing ->
+        return map { tuple ->
+            val printing = requireNotNull(tuple.get(cardPrinting)) { "card printing must exist" }
             val identity = printing.cardIdentity
             val identityId = requireNotNull(identity.id) { "card identity id must exist" }
 
@@ -167,21 +228,31 @@ class CustomCardPrintingRepositoryImpl(
                 printingId = requireNotNull(printing.id) { "card printing id must exist" },
                 cardIdentityId = identityId,
                 cardNo = identity.cardNo,
-                name = identity.name,
+                name = tuple.get(cardIdentityTranslation.name)
+                    ?: tuple.get(jpCardIdentityTranslation.name)
+                    ?: identity.name,
                 cardType = identity.cardType,
                 cost = identity.cost,
                 life = identity.life,
                 power = identity.power,
                 counter = identity.counter,
-                attribute = identity.attribute?.name,
-                effectText = identity.effectText,
-                triggerText = identity.triggerText,
+                attribute = tuple.get(cardAttributeTranslation.name)
+                    ?: tuple.get(jpCardAttributeTranslation.name)
+                    ?: identity.attribute?.name,
+                effectText = tuple.get(cardIdentityTranslation.effectText)
+                    ?: tuple.get(jpCardIdentityTranslation.effectText)
+                    ?: identity.effectText,
+                triggerText = tuple.get(cardIdentityTranslation.triggerText)
+                    ?: tuple.get(jpCardIdentityTranslation.triggerText)
+                    ?: identity.triggerText,
                 blockNo = identity.blockNo,
                 colors = colorsByIdentityId[identityId].orEmpty(),
                 traits = traitsByIdentityId[identityId].orEmpty(),
                 cardSet = CardSetSearchRow(
                     code = printing.cardSet.code,
-                    name = printing.cardSet.name,
+                    name = tuple.get(cardSetTranslation.name)
+                        ?: tuple.get(jpCardSetTranslation.name)
+                        ?: printing.cardSet.name,
                 ),
                 rarity = printing.rarity?.let {
                     CardRaritySearchRow(
@@ -222,26 +293,53 @@ class CustomCardPrintingRepositoryImpl(
                 },
             )
 
-    private fun traitsByIdentityId(identityIds: Set<UUID>): Map<UUID, List<CardTraitSearchRow>> =
+    private fun traitsByIdentityId(
+        identityIds: Set<UUID>,
+        languageCode: String?,
+    ): Map<UUID, List<CardTraitSearchRow>> =
         queryFactory
             .select(
                 cardIdentityTrait.cardIdentity.id,
+                cardTraitTranslation.name,
+                jpCardTraitTranslation.name,
                 cardIdentityTrait.trait.name,
             )
             .from(cardIdentityTrait)
+            .leftJoin(cardTraitTranslation).on(
+                cardTraitTranslation.trait.eq(cardIdentityTrait.trait)
+                    .and(cardTraitTranslation.languageCode.eq(languageCode ?: DEFAULT_LANGUAGE_CODE)),
+            )
+            .leftJoin(jpCardTraitTranslation).on(
+                jpCardTraitTranslation.trait.eq(cardIdentityTrait.trait)
+                    .and(jpCardTraitTranslation.languageCode.eq(DEFAULT_LANGUAGE_CODE)),
+            )
             .where(cardIdentityTrait.cardIdentity.id.`in`(identityIds))
-            .orderBy(cardIdentityTrait.trait.name.asc())
+            .orderBy(
+                cardTraitTranslation.name.asc().nullsLast(),
+                jpCardTraitTranslation.name.asc().nullsLast(),
+                cardIdentityTrait.trait.name.asc(),
+            )
             .fetch()
             .groupBy(
                 { requireNotNull(it.get(cardIdentityTrait.cardIdentity.id)) },
                 {
                     CardTraitSearchRow(
-                        name = requireNotNull(it.get(cardIdentityTrait.trait.name)),
+                        name = requireNotNull(
+                            it.get(cardTraitTranslation.name)
+                                ?: it.get(jpCardTraitTranslation.name)
+                                ?: it.get(cardIdentityTrait.trait.name),
+                        ),
                     )
                 },
             )
 
     private companion object {
         const val DESC = "DESC"
+        const val DEFAULT_LANGUAGE_CODE = "jp"
+
+        val jpCardIdentityTranslation = QCardIdentityTranslation("jpCardIdentityTranslation")
+        val jpCardSetTranslation = QCardSetTranslation("jpCardSetTranslation")
+        val jpCardAttributeTranslation = QCardAttributeTranslation("jpCardAttributeTranslation")
+        val jpCardTraitTranslation = QCardTraitTranslation("jpCardTraitTranslation")
     }
 }
