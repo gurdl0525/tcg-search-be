@@ -100,4 +100,60 @@ class SchemaMigrationTests(
 		assertEquals(1, snkrDunkCount)
 		assertEquals(6, colorCount)
 	}
+
+	@Test
+	fun `flyway creates multilingual card translation tables`() {
+		val tableNames = jdbcTemplate.queryForList(
+			"""
+			select table_name
+			from information_schema.tables
+			where table_schema = 'public'
+			  and table_name in (
+			      'card_identity_translations',
+			      'card_set_translations',
+			      'attribute_translations',
+			      'trait_translations'
+			  )
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		assertEquals(
+			setOf(
+				"card_identity_translations",
+				"card_set_translations",
+				"attribute_translations",
+				"trait_translations",
+			),
+			tableNames,
+		)
+	}
+
+	@Test
+	fun `flyway creates multilingual translation unique constraints`() {
+		val uniqueIndexes = jdbcTemplate.queryForList(
+			"""
+			select indexname
+			from pg_indexes
+			where schemaname = 'public'
+			  and indexname in (
+			      'card_identity_translations_identity_language_unique',
+			      'card_set_translations_set_language_unique',
+			      'attribute_translations_attribute_language_unique',
+			      'trait_translations_trait_language_unique'
+			  )
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		assertEquals(
+			setOf(
+				"card_identity_translations_identity_language_unique",
+				"card_set_translations_set_language_unique",
+				"attribute_translations_attribute_language_unique",
+				"trait_translations_trait_language_unique",
+			),
+			uniqueIndexes,
+		)
+	}
 }
