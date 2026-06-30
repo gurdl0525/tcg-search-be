@@ -158,6 +158,47 @@ class CardSearchApiTests(
             .andExpect(jsonPath("$.content[0].language_code").value("en"))
     }
 
+    @Test
+    fun `search cards matches card names across english japanese and korean translations`() {
+        seedMultilingualLuffyPrinting()
+
+        mockMvc
+            .perform(
+                get("/api/cards")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}")
+                    .param("search_word", "Luffy")
+                    .param("language_code", "jp"),
+            )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_elements").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("モンキー・D・ルフィ"))
+            .andExpect(jsonPath("$.content[0].language_code").value("jp"))
+
+        mockMvc
+            .perform(
+                get("/api/cards")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}")
+                    .param("search_word", "ルフィ")
+                    .param("language_code", "en"),
+            )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_elements").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("Monkey.D.Luffy"))
+            .andExpect(jsonPath("$.content[0].language_code").value("en"))
+
+        mockMvc
+            .perform(
+                get("/api/cards")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${createAccessToken()}")
+                    .param("search_word", "ㄹ")
+                    .param("language_code", "ko"),
+            )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_elements").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("몽키 D. 루피"))
+            .andExpect(jsonPath("$.content[0].language_code").value("ko"))
+    }
+
     private fun seedLuffyPrintings() {
         val strikeAttributeId = findId("select id from attributes where name = ?", "Strike")
         val redColorId = findId("select id from colors where code = ?", "red")
@@ -264,8 +305,16 @@ class CardSearchApiTests(
             effectText = "English effect text",
             triggerText = null,
         )
+        insertCardIdentityTranslation(
+            identityId = identityId,
+            languageCode = "ko",
+            name = "몽키 D. 루피",
+            effectText = "한국어 효과",
+            triggerText = null,
+        )
         insertCardSetTranslation(cardSetId, "jp", "ROMANCE DAWN 日本語")
         insertCardSetTranslation(cardSetId, "en", "ROMANCE DAWN English")
+        insertCardSetTranslation(cardSetId, "ko", "ROMANCE DAWN 한국어")
 
         insertCardPrinting(
             identityId = identityId,
@@ -284,6 +333,15 @@ class CardSearchApiTests(
             isParallel = false,
             imageUrl = "https://cdn.example.test/en/op01-001.png",
             languageCode = "en",
+        )
+        insertCardPrinting(
+            identityId = identityId,
+            cardSetId = cardSetId,
+            rarityId = leaderRarityId,
+            variantName = "standard-ko",
+            isParallel = false,
+            imageUrl = "https://cdn.example.test/ko/op01-001.png",
+            languageCode = "ko",
         )
     }
 
@@ -379,8 +437,8 @@ class CardSearchApiTests(
         name: String,
         effectText: String,
         triggerText: String?,
-    ): UUID =
-        insertReturningId(
+    ): UUID {
+        val translationId = insertReturningId(
             """
             insert into card_identity_translations (
                 card_identity_id,
@@ -398,6 +456,109 @@ class CardSearchApiTests(
             effectText,
             triggerText,
         )
+        insertSearchTokens(translationId, identityId, languageCode, "name", name)
+        insertSearchTokens(translationId, identityId, languageCode, "effect_text", effectText)
+        triggerText?.let {
+            insertSearchTokens(translationId, identityId, languageCode, "trigger_text", it)
+        }
+        return translationId
+    }
+
+    private fun insertSearchTokens(
+        translationId: UUID,
+        identityId: UUID,
+        languageCode: String,
+        sourceField: String,
+        value: String,
+    ) {
+        searchTokensFor(value).forEach { searchToken ->
+            jdbcTemplate.update(
+                """
+                insert into card_identity_translation_search_tokens (
+                    card_identity_translation_id,
+                    card_identity_id,
+                    language_code,
+                    source_field,
+                    token_type,
+                    token,
+                    weight
+                )
+                values (?, ?, ?, ?, ?, ?, ?)
+                on conflict do nothing
+                """.trimIndent(),
+                translationId,
+                identityId,
+                languageCode,
+                sourceField,
+                searchToken.type,
+                searchToken.token,
+                searchToken.weight,
+            )
+        }
+    }
+
+    private fun searchTokensFor(value: String): Set<SearchToken> = buildSet {
+        val normalized = value.toSearchToken()
+        if (normalized.isNotBlank()) {
+            add(SearchToken(token = normalized, type = "normalized", weight = 100))
+            normalized.ngrams(size = 2).forEach {
+                add(SearchToken(token = it, type = "ngram", weight = 20))
+            }
+        }
+
+        val words = value
+            .split(SEARCH_TOKEN_SEPARATOR_REGEX)
+            .map { it.toSearchToken() }
+            .filter { it.isNotBlank() }
+
+        words.forEach { word ->
+            add(SearchToken(token = word, type = "word", weight = 90))
+            word.prefixes().forEach {
+                add(SearchToken(token = it, type = "prefix", weight = 50))
+            }
+
+            val choseong = word.toChoseong()
+            if (choseong.isNotBlank()) {
+                add(SearchToken(token = choseong, type = "choseong", weight = 70))
+                choseong.prefixes().forEach {
+                    add(SearchToken(token = it, type = "choseong_prefix", weight = 60))
+                }
+            }
+        }
+
+        val fullChoseong = value.toChoseong()
+        if (fullChoseong.isNotBlank()) {
+            add(SearchToken(token = fullChoseong, type = "choseong", weight = 70))
+            fullChoseong.prefixes().forEach {
+                add(SearchToken(token = it, type = "choseong_prefix", weight = 60))
+            }
+        }
+    }
+
+    private fun String.toSearchToken(): String =
+        lowercase().replace(SEARCH_TOKEN_SEPARATOR_REGEX, "")
+
+    private fun String.prefixes(): List<String> =
+        indices.map { index -> substring(0, index + 1) }
+
+    private fun String.ngrams(size: Int): List<String> =
+        if (length < size) {
+            emptyList()
+        } else {
+            (0..length - size).map { index -> substring(index, index + size) }
+        }
+
+    private fun String.toChoseong(): String =
+        mapNotNull { char ->
+            when (char.code) {
+                in HANGUL_SYLLABLE_START..HANGUL_SYLLABLE_END -> {
+                    val index = (char.code - HANGUL_SYLLABLE_START) / HANGUL_JUNGSEONG_JONGSEONG_COUNT
+                    HANGUL_CHOSEONG[index]
+                }
+                in HANGUL_COMPATIBILITY_JAMO_START..HANGUL_COMPATIBILITY_JAMO_END -> char
+                else -> null
+            }
+        }.joinToString("")
 
     private fun insertCardSetTranslation(
         cardSetId: UUID,
@@ -436,5 +597,41 @@ class CardSearchApiTests(
         return jwtEncoder
             .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
             .tokenValue
+    }
+
+    private data class SearchToken(
+        val token: String,
+        val type: String,
+        val weight: Int,
+    )
+
+    private companion object {
+        val SEARCH_TOKEN_SEPARATOR_REGEX = Regex("[^\\p{L}\\p{N}]")
+        val HANGUL_CHOSEONG = listOf(
+            'ㄱ',
+            'ㄲ',
+            'ㄴ',
+            'ㄷ',
+            'ㄸ',
+            'ㄹ',
+            'ㅁ',
+            'ㅂ',
+            'ㅃ',
+            'ㅅ',
+            'ㅆ',
+            'ㅇ',
+            'ㅈ',
+            'ㅉ',
+            'ㅊ',
+            'ㅋ',
+            'ㅌ',
+            'ㅍ',
+            'ㅎ',
+        )
+        const val HANGUL_SYLLABLE_START = 0xAC00
+        const val HANGUL_SYLLABLE_END = 0xD7A3
+        const val HANGUL_JUNGSEONG_JONGSEONG_COUNT = 21 * 28
+        const val HANGUL_COMPATIBILITY_JAMO_START = 0x3130
+        const val HANGUL_COMPATIBILITY_JAMO_END = 0x318F
     }
 }

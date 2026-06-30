@@ -15,6 +15,7 @@ import com.tcgsearch.domain.card.entity.QCardIdentityColor.cardIdentityColor
 import com.tcgsearch.domain.card.entity.QCardIdentityTrait.cardIdentityTrait
 import com.tcgsearch.domain.card.entity.QCardIdentityTranslation
 import com.tcgsearch.domain.card.entity.QCardIdentityTranslation.cardIdentityTranslation
+import com.tcgsearch.domain.card.entity.QCardIdentityTranslationSearchToken.cardIdentityTranslationSearchToken
 import com.tcgsearch.domain.card.entity.QCardPrinting.cardPrinting
 import com.tcgsearch.domain.card.entity.QCardSetTranslation
 import com.tcgsearch.domain.card.entity.QCardSetTranslation.cardSetTranslation
@@ -111,15 +112,14 @@ class CustomCardPrintingRepositoryImpl(
         val builder = BooleanBuilder()
 
         condition.searchWord?.let { searchWord ->
-            builder.and(
+            val searchToken = searchWord.toSearchToken()
+            val searchPredicate = if (searchToken.isBlank()) {
                 cardIdentity.cardNo.containsIgnoreCase(searchWord)
-                    .or(cardIdentityTranslation.name.containsIgnoreCase(searchWord))
-                    .or(cardIdentityTranslation.effectText.containsIgnoreCase(searchWord))
-                    .or(cardIdentityTranslation.triggerText.containsIgnoreCase(searchWord))
-                    .or(jpCardIdentityTranslation.name.containsIgnoreCase(searchWord))
-                    .or(jpCardIdentityTranslation.effectText.containsIgnoreCase(searchWord))
-                    .or(jpCardIdentityTranslation.triggerText.containsIgnoreCase(searchWord)),
-            )
+            } else {
+                cardIdentity.cardNo.containsIgnoreCase(searchWord)
+                    .or(hasSearchToken(searchToken))
+            }
+            builder.and(searchPredicate)
         }
         condition.cardTypes.takeIf { it.isNotEmpty() }?.let {
             builder.and(cardIdentity.cardType.`in`(it))
@@ -180,6 +180,19 @@ class CustomCardPrintingRepositoryImpl(
                     .and(cardIdentityTrait.trait.name.`in`(traits)),
             )
             .exists()
+
+    private fun hasSearchToken(searchToken: String) =
+        JPAExpressions
+            .selectOne()
+            .from(cardIdentityTranslationSearchToken)
+            .where(
+                cardIdentityTranslationSearchToken.cardIdentity.eq(cardIdentity)
+                    .and(cardIdentityTranslationSearchToken.token.eq(searchToken)),
+            )
+            .exists()
+
+    private fun String.toSearchToken(): String =
+        lowercase().replace(SEARCH_TOKEN_SEPARATOR_REGEX, "")
 
     private fun orderSpecifiers(condition: CardPrintingSearchCondition): Array<OrderSpecifier<*>> {
         val order = if (condition.sort == DESC) Order.DESC else Order.ASC
@@ -341,5 +354,6 @@ class CustomCardPrintingRepositoryImpl(
         val jpCardSetTranslation = QCardSetTranslation("jpCardSetTranslation")
         val jpCardAttributeTranslation = QCardAttributeTranslation("jpCardAttributeTranslation")
         val jpCardTraitTranslation = QCardTraitTranslation("jpCardTraitTranslation")
+        val SEARCH_TOKEN_SEPARATOR_REGEX = Regex("[^\\p{L}\\p{N}]")
     }
 }

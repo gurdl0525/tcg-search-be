@@ -156,4 +156,44 @@ class SchemaMigrationTests(
 			uniqueIndexes,
 		)
 	}
+
+	@Test
+	fun `flyway creates card translation search token table and indexes`() {
+		val tableNames = jdbcTemplate.queryForList(
+			"""
+			select table_name
+			from information_schema.tables
+			where table_schema = 'public'
+			  and table_name = 'card_identity_translation_search_tokens'
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		val indexNames = jdbcTemplate.queryForList(
+			"""
+			select indexname
+			from pg_indexes
+			where schemaname = 'public'
+			  and tablename = 'card_identity_translation_search_tokens'
+			  and indexname in (
+			      'cit_search_tokens_translation_token_unique',
+			      'cit_search_tokens_token_identity_idx',
+			      'cit_search_tokens_identity_idx',
+			      'cit_search_tokens_language_token_idx'
+			  )
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		assertEquals(setOf("card_identity_translation_search_tokens"), tableNames)
+		assertEquals(
+			setOf(
+				"cit_search_tokens_translation_token_unique",
+				"cit_search_tokens_token_identity_idx",
+				"cit_search_tokens_identity_idx",
+				"cit_search_tokens_language_token_idx",
+			),
+			indexNames,
+		)
+	}
 }

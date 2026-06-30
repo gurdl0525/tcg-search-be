@@ -35,6 +35,7 @@ class JpaEntityMappingTests(
                 "card_set_translations",
                 "card_identities",
                 "card_identity_translations",
+                "card_identity_translation_search_tokens",
                 "card_identity_colors",
                 "card_identity_traits",
                 "card_printings",
