@@ -196,4 +196,66 @@ class SchemaMigrationTests(
 			indexNames,
 		)
 	}
+
+	@Test
+	fun `flyway creates ios card search support tables columns and indexes`() {
+		val columnNames = jdbcTemplate.queryForList(
+			"""
+			select column_name
+			from information_schema.columns
+			where table_schema = 'public'
+			  and table_name = 'card_printings'
+			  and column_name = 'detail_tags'
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		val tableNames = jdbcTemplate.queryForList(
+			"""
+			select table_name
+			from information_schema.tables
+			where table_schema = 'public'
+			  and table_name in (
+			      'illustrators',
+			      'card_printing_illustrators',
+			      'card_search_events'
+			  )
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		val indexNames = jdbcTemplate.queryForList(
+			"""
+			select indexname
+			from pg_indexes
+			where schemaname = 'public'
+			  and indexname in (
+			      'card_printings_detail_tags_idx',
+			      'card_printing_illustrators_illustrator_idx',
+			      'card_search_events_event_type_created_idx',
+			      'card_search_events_selected_printing_idx'
+			  )
+			""".trimIndent(),
+			String::class.java,
+		).toSet()
+
+		assertEquals(setOf("detail_tags"), columnNames)
+		assertEquals(
+			setOf(
+				"illustrators",
+				"card_printing_illustrators",
+				"card_search_events",
+			),
+			tableNames,
+		)
+		assertEquals(
+			setOf(
+				"card_printings_detail_tags_idx",
+				"card_printing_illustrators_illustrator_idx",
+				"card_search_events_event_type_created_idx",
+				"card_search_events_selected_printing_idx",
+			),
+			indexNames,
+		)
+	}
 }
