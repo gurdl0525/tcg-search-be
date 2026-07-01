@@ -81,6 +81,20 @@ class SecurityConfig(
                         "/api/auth/refresh",
                         "/api/auth/logout",
                     ).permitAll()
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/cards",
+                        "/api/cards/search",
+                        "/api/cards/trending",
+                        "/api/cards/filter-options",
+                        "/api/cards/packs",
+                        "/api/cards/characters",
+                        "/api/cards/illustrators",
+                        "/api/cards/*",
+                        "/api/cards/*/related-printings",
+                        "/api/cards/*/marketplace-links",
+                    ).permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/cards/search-events").permitAll()
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().denyAll()
             }

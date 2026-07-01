@@ -13,4 +13,6 @@ import java.util.UUID
  * @since 25-06-2026
  */
 @org.springframework.stereotype.Repository
-interface CardPrintingRepository : Repository<CardPrinting, UUID>, CustomCardPrintingRepository
+interface CardPrintingRepository : Repository<CardPrinting, UUID>, CustomCardPrintingRepository {
+    fun findById(id: UUID): CardPrinting?
+}

@@ -1,5 +1,7 @@
 package com.tcgsearch.domain.card.service
 
+import java.util.UUID
+
 /**
  * 카드 검색 조건을 서비스 계층으로 전달합니다.
  *
@@ -26,4 +28,9 @@ data class CardSearchQuery(
     val illustrationTypes: Set<String>,
     val foilTreatments: Set<String>,
     val blockNo: Int?,
+    val language: String = languageCode ?: "jp",
+    val detailTags: Set<String> = emptySet(),
+    val packCodes: Set<String> = cardSets,
+    val characterIds: Set<UUID> = emptySet(),
+    val illustratorIds: Set<UUID> = emptySet(),
 )

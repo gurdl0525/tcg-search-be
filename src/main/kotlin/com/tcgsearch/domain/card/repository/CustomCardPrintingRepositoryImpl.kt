@@ -16,11 +16,16 @@ import com.tcgsearch.domain.card.entity.QCardIdentityTrait.cardIdentityTrait
 import com.tcgsearch.domain.card.entity.QCardIdentityTranslation
 import com.tcgsearch.domain.card.entity.QCardIdentityTranslation.cardIdentityTranslation
 import com.tcgsearch.domain.card.entity.QCardIdentityTranslationSearchToken.cardIdentityTranslationSearchToken
+import com.tcgsearch.domain.card.entity.QCardPrintingIllustrator.cardPrintingIllustrator
 import com.tcgsearch.domain.card.entity.QCardPrinting.cardPrinting
 import com.tcgsearch.domain.card.entity.QCardSetTranslation
 import com.tcgsearch.domain.card.entity.QCardSetTranslation.cardSetTranslation
 import com.tcgsearch.domain.card.entity.QCardTraitTranslation
 import com.tcgsearch.domain.card.entity.QCardTraitTranslation.cardTraitTranslation
+import com.tcgsearch.domain.marketplace.entity.QExternalCardLink.externalCardLink
+import com.tcgsearch.domain.marketplace.entity.QExternalMarketplace.externalMarketplace
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 import org.springframework.stereotype.Repository
 
@@ -42,6 +47,98 @@ class CustomCardPrintingRepositoryImpl(
             rows = printings.toRows(condition.languageCode),
             totalElements = totalElements,
         )
+    }
+
+    override fun findDetailByPrintingId(
+        printingId: UUID,
+        languageCode: String?,
+    ): CardPrintingSearchRow? {
+        val predicate = BooleanBuilder(cardPrinting.id.eq(printingId))
+
+        return contentQuery(predicate)
+            .fetch()
+            .toRows(languageCode)
+            .firstOrNull()
+    }
+
+    override fun findRelatedPrintings(printingId: UUID): List<CardPrintingSearchRow> {
+        val identityId = queryFactory
+            .select(cardIdentity.id)
+            .from(cardPrinting)
+            .join(cardPrinting.cardIdentity, cardIdentity)
+            .where(cardPrinting.id.eq(printingId))
+            .fetchOne()
+            ?: return emptyList()
+
+        return contentQuery(BooleanBuilder(cardIdentity.id.eq(identityId)))
+            .orderBy(
+                cardPrinting.languageCode.asc(),
+                cardPrinting.isParallel.desc(),
+                cardPrinting.variantName.asc().nullsFirst(),
+                cardPrinting.id.asc(),
+            )
+            .fetch()
+            .toRows(null)
+    }
+
+    override fun findMarketplaceLinks(printingId: UUID): List<MarketplaceLinkRow> {
+        val detail = findDetailByPrintingId(printingId, null) ?: return emptyList()
+        val manualLinks = queryFactory
+            .select(
+                externalMarketplace.code,
+                externalMarketplace.name,
+                externalCardLink.url,
+                externalCardLink.updatedAt,
+            )
+            .from(externalCardLink)
+            .join(externalCardLink.marketplace, externalMarketplace)
+            .where(
+                externalCardLink.isActive.isTrue
+                    .and(
+                        externalCardLink.cardPrinting.id.eq(printingId)
+                            .or(
+                                externalCardLink.cardIdentity.id.eq(detail.cardIdentityId)
+                                    .and(externalCardLink.cardPrinting.isNull),
+                            ),
+                    ),
+            )
+            .orderBy(externalCardLink.priority.asc(), externalCardLink.updatedAt.desc())
+            .fetch()
+            .map { tuple ->
+                val provider = requireNotNull(tuple.get(externalMarketplace.code)).uppercase()
+                MarketplaceLinkRow(
+                    provider = provider,
+                    label = "${requireNotNull(tuple.get(externalMarketplace.name))} 검색",
+                    url = requireNotNull(tuple.get(externalCardLink.url)),
+                    updatedAt = requireNotNull(tuple.get(externalCardLink.updatedAt)),
+                )
+            }
+
+        if (manualLinks.isNotEmpty()) {
+            return manualLinks
+        }
+
+        return queryFactory
+            .select(
+                externalMarketplace.code,
+                externalMarketplace.name,
+                externalMarketplace.searchUrlTemplate,
+                externalMarketplace.updatedAt,
+            )
+            .from(externalMarketplace)
+            .where(externalMarketplace.code.equalsIgnoreCase(SNKR_DUNK_MARKETPLACE_CODE))
+            .fetch()
+            .map { tuple ->
+                val provider = requireNotNull(tuple.get(externalMarketplace.code)).uppercase()
+                val marketplaceName = requireNotNull(tuple.get(externalMarketplace.name))
+                val template = requireNotNull(tuple.get(externalMarketplace.searchUrlTemplate))
+                MarketplaceLinkRow(
+                    provider = provider,
+                    label = "$marketplaceName 검색",
+                    url = template.replace("{query}", detail.searchQuery().urlEncoded()),
+                    updatedAt = requireNotNull(tuple.get(externalMarketplace.updatedAt)),
+                )
+            }
     }
 
     private fun count(predicate: BooleanBuilder): Long =
@@ -157,6 +254,15 @@ class CustomCardPrintingRepositoryImpl(
         condition.blockNo?.let {
             builder.and(cardIdentity.blockNo.eq(it))
         }
+        condition.detailTags.takeIf { it.isNotEmpty() }?.let {
+            builder.and(hasDetailTag(it))
+        }
+        condition.characterIds.takeIf { it.isNotEmpty() }?.let {
+            builder.and(hasTraitIds(it))
+        }
+        condition.illustratorIds.takeIf { it.isNotEmpty() }?.let {
+            builder.and(hasIllustratorIds(it))
+        }
 
         return builder
     }
@@ -180,6 +286,39 @@ class CustomCardPrintingRepositoryImpl(
                     .and(cardIdentityTrait.trait.name.`in`(traits)),
             )
             .exists()
+
+    private fun hasTraitIds(traitIds: Set<UUID>) =
+        JPAExpressions
+            .selectOne()
+            .from(cardIdentityTrait)
+            .where(
+                cardIdentityTrait.cardIdentity.eq(cardIdentity)
+                    .and(cardIdentityTrait.trait.id.`in`(traitIds)),
+            )
+            .exists()
+
+    private fun hasIllustratorIds(illustratorIds: Set<UUID>) =
+        JPAExpressions
+            .selectOne()
+            .from(cardPrintingIllustrator)
+            .where(
+                cardPrintingIllustrator.cardPrinting.eq(cardPrinting)
+                    .and(cardPrintingIllustrator.illustrator.id.`in`(illustratorIds)),
+            )
+            .exists()
+
+    private fun hasDetailTag(detailTags: Set<String>): BooleanBuilder {
+        val tagPredicate = BooleanBuilder()
+        detailTags.forEach { tag ->
+            when (tag.uppercase()) {
+                PARALLEL_TAG -> tagPredicate.or(cardPrinting.isParallel.isTrue)
+                SP_TAG -> tagPredicate.or(cardPrinting.rarity.code.`in`("SP", "SP_CARD"))
+                PROMO_TAG -> tagPredicate.or(cardPrinting.rarity.code.`in`("P", "PROMO"))
+                MANGA_TAG -> tagPredicate.or(cardPrinting.variantName.containsIgnoreCase("manga"))
+            }
+        }
+        return tagPredicate
+    }
 
     private fun hasSearchToken(searchToken: String) =
         JPAExpressions
@@ -229,8 +368,12 @@ class CustomCardPrintingRepositoryImpl(
         val identityIds = printings.map { printing ->
             requireNotNull(printing.cardIdentity.id) { "card identity id must exist" }
         }.toSet()
+        val printingIds = printings.map { printing ->
+            requireNotNull(printing.id) { "card printing id must exist" }
+        }.toSet()
         val colorsByIdentityId = colorsByIdentityId(identityIds)
         val traitsByIdentityId = traitsByIdentityId(identityIds, languageCode)
+        val illustratorsByPrintingId = illustratorsByPrintingId(printingIds)
 
         return map { tuple ->
             val printing = requireNotNull(tuple.get(cardPrinting)) { "card printing must exist" }
@@ -281,6 +424,9 @@ class CustomCardPrintingRepositoryImpl(
                 illustrationType = printing.illustrationType,
                 imageUrl = printing.imageUrl,
                 sourceUrl = printing.sourceUrl,
+                detailTags = detailTagsFor(printing.rarity?.code, printing.variantName, printing.isParallel),
+                releaseDate = printing.cardSet.releaseDate,
+                illustrator = illustratorsByPrintingId[requireNotNull(printing.id)]?.firstOrNull(),
             )
         }
     }
@@ -346,9 +492,67 @@ class CustomCardPrintingRepositoryImpl(
                 },
             )
 
+    private fun illustratorsByPrintingId(printingIds: Set<UUID>): Map<UUID, List<IllustratorSearchRow>> {
+        if (printingIds.isEmpty()) {
+            return emptyMap()
+        }
+
+        return queryFactory
+            .select(
+                cardPrintingIllustrator.cardPrinting.id,
+                cardPrintingIllustrator.illustrator.id,
+                cardPrintingIllustrator.illustrator.name,
+            )
+            .from(cardPrintingIllustrator)
+            .where(cardPrintingIllustrator.cardPrinting.id.`in`(printingIds))
+            .orderBy(cardPrintingIllustrator.illustrator.name.asc())
+            .fetch()
+            .groupBy(
+                { requireNotNull(it.get(cardPrintingIllustrator.cardPrinting.id)) },
+                {
+                    IllustratorSearchRow(
+                        id = requireNotNull(it.get(cardPrintingIllustrator.illustrator.id)),
+                        name = requireNotNull(it.get(cardPrintingIllustrator.illustrator.name)),
+                    )
+                },
+            )
+    }
+
+    private fun detailTagsFor(
+        rarityCode: String?,
+        variantName: String?,
+        isParallel: Boolean,
+    ): List<String> = buildList {
+        if (isParallel) {
+            add(PARALLEL_TAG)
+        }
+        val normalizedRarity = rarityCode.orEmpty().uppercase()
+        val normalizedVariant = variantName.orEmpty().uppercase()
+        if (normalizedRarity in setOf("SP", "SP_CARD") || SP_TAG in normalizedVariant) {
+            add(SP_TAG)
+        }
+        if (normalizedRarity in setOf("P", "PROMO") || PROMO_TAG in normalizedVariant) {
+            add(PROMO_TAG)
+        }
+        if (MANGA_TAG in normalizedVariant) {
+            add(MANGA_TAG)
+        }
+    }.distinct()
+
+    private fun CardPrintingSearchRow.searchQuery(): String =
+        "$cardNo $name"
+
+    private fun String.urlEncoded(): String =
+        URLEncoder.encode(this, StandardCharsets.UTF_8)
+
     private companion object {
         const val DESC = "DESC"
         const val DEFAULT_LANGUAGE_CODE = "jp"
+        const val SNKR_DUNK_MARKETPLACE_CODE = "snkrdunk"
+        const val PARALLEL_TAG = "PARALLEL"
+        const val SP_TAG = "SP"
+        const val PROMO_TAG = "PROMO"
+        const val MANGA_TAG = "MANGA"
 
         val jpCardIdentityTranslation = QCardIdentityTranslation("jpCardIdentityTranslation")
         val jpCardSetTranslation = QCardSetTranslation("jpCardSetTranslation")

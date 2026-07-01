@@ -55,9 +55,20 @@ class SecurityConfigurationTests(
 	}
 
 	@Test
-	fun `api requests require bearer authentication`() {
+	fun `public card discovery requests do not require bearer authentication`() {
 		mockMvc
 			.perform(get("/api/cards"))
+			.andExpect(status().isOk)
+
+		mockMvc
+			.perform(get("/api/cards/filter-options"))
+			.andExpect(status().isOk)
+	}
+
+	@Test
+	fun `me api requests require bearer authentication`() {
+		mockMvc
+			.perform(get("/api/me/collections/summary"))
 			.andExpect(status().isUnauthorized)
 	}
 

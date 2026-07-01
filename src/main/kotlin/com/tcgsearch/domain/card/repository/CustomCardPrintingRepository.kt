@@ -1,5 +1,7 @@
 package com.tcgsearch.domain.card.repository
 
+import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 /**
@@ -12,6 +14,15 @@ import java.util.UUID
  */
 interface CustomCardPrintingRepository {
     fun search(condition: CardPrintingSearchCondition): CardPrintingSearchResult
+
+    fun findDetailByPrintingId(
+        printingId: UUID,
+        languageCode: String?,
+    ): CardPrintingSearchRow?
+
+    fun findRelatedPrintings(printingId: UUID): List<CardPrintingSearchRow>
+
+    fun findMarketplaceLinks(printingId: UUID): List<MarketplaceLinkRow>
 }
 
 data class CardPrintingSearchCondition(
@@ -32,6 +43,9 @@ data class CardPrintingSearchCondition(
     val illustrationTypes: Set<String>,
     val foilTreatments: Set<String>,
     val blockNo: Int?,
+    val detailTags: Set<String> = emptySet(),
+    val characterIds: Set<UUID> = emptySet(),
+    val illustratorIds: Set<UUID> = emptySet(),
 )
 
 data class CardPrintingSearchResult(
@@ -65,6 +79,9 @@ data class CardPrintingSearchRow(
     val illustrationType: String?,
     val imageUrl: String?,
     val sourceUrl: String?,
+    val detailTags: List<String>,
+    val releaseDate: LocalDate?,
+    val illustrator: IllustratorSearchRow?,
 )
 
 data class CardColorSearchRow(
@@ -84,4 +101,16 @@ data class CardSetSearchRow(
 data class CardRaritySearchRow(
     val code: String,
     val name: String,
+)
+
+data class IllustratorSearchRow(
+    val id: UUID,
+    val name: String,
+)
+
+data class MarketplaceLinkRow(
+    val provider: String,
+    val label: String,
+    val url: String,
+    val updatedAt: Instant,
 )
