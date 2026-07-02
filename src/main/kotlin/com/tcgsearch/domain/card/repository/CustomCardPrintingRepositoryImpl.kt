@@ -4,6 +4,7 @@ import com.querydsl.core.BooleanBuilder
 import com.querydsl.core.Tuple
 import com.querydsl.core.types.Order
 import com.querydsl.core.types.OrderSpecifier
+import com.querydsl.core.types.dsl.Expressions
 import com.querydsl.jpa.JPAExpressions
 import com.querydsl.jpa.impl.JPAQuery
 import com.querydsl.jpa.impl.JPAQueryFactory
@@ -310,12 +311,13 @@ class CustomCardPrintingRepositoryImpl(
     private fun hasDetailTag(detailTags: Set<String>): BooleanBuilder {
         val tagPredicate = BooleanBuilder()
         detailTags.forEach { tag ->
-            when (tag.uppercase()) {
-                PARALLEL_TAG -> tagPredicate.or(cardPrinting.isParallel.isTrue)
-                SP_TAG -> tagPredicate.or(cardPrinting.rarity.code.`in`("SP", "SP_CARD"))
-                PROMO_TAG -> tagPredicate.or(cardPrinting.rarity.code.`in`("P", "PROMO"))
-                MANGA_TAG -> tagPredicate.or(cardPrinting.variantName.containsIgnoreCase("manga"))
-            }
+            tagPredicate.or(
+                Expressions.booleanTemplate(
+                    "array_position({0}, {1}) is not null",
+                    cardPrinting.detailTags,
+                    tag.uppercase(),
+                ),
+            )
         }
         return tagPredicate
     }
@@ -424,7 +426,12 @@ class CustomCardPrintingRepositoryImpl(
                 illustrationType = printing.illustrationType,
                 imageUrl = printing.imageUrl,
                 sourceUrl = printing.sourceUrl,
-                detailTags = detailTagsFor(printing.rarity?.code, printing.variantName, printing.isParallel),
+                detailTags = detailTagsFor(
+                    storedTags = printing.detailTags.toList(),
+                    rarityCode = printing.rarity?.code,
+                    variantName = printing.variantName,
+                    isParallel = printing.isParallel,
+                ),
                 releaseDate = printing.cardSet.releaseDate,
                 illustrator = illustratorsByPrintingId[requireNotNull(printing.id)]?.firstOrNull(),
             )
@@ -519,10 +526,12 @@ class CustomCardPrintingRepositoryImpl(
     }
 
     private fun detailTagsFor(
+        storedTags: List<String>,
         rarityCode: String?,
         variantName: String?,
         isParallel: Boolean,
     ): List<String> = buildList {
+        addAll(storedTags)
         if (isParallel) {
             add(PARALLEL_TAG)
         }

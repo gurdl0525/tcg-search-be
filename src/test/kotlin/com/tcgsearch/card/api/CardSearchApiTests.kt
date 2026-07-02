@@ -199,6 +199,25 @@ class CardSearchApiTests(
             .andExpect(jsonPath("$.content[0].language_code").value("ko"))
     }
 
+    @Test
+    fun `ios search filters manga cards by printing detail tags`() {
+        seedMangaPrinting()
+
+        mockMvc
+            .perform(
+                get("/api/cards/search")
+                    .param("detail_tags", "MANGA")
+                    .param("language", "en")
+                    .param("page", "0")
+                    .param("size", "20"),
+            )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_count").value(1))
+            .andExpect(jsonPath("$.content[0].card_no").value("OP05-119"))
+            .andExpect(jsonPath("$.content[0].variant.detail_tags[0]").value("PARALLEL"))
+            .andExpect(jsonPath("$.content[0].variant.detail_tags[1]").value("MANGA"))
+    }
+
     private fun seedLuffyPrintings() {
         val strikeAttributeId = findId("select id from attributes where name = ?", "Strike")
         val redColorId = findId("select id from colors where code = ?", "red")
@@ -345,6 +364,36 @@ class CardSearchApiTests(
         )
     }
 
+    private fun seedMangaPrinting() {
+        val strikeAttributeId = findId("select id from attributes where name = ?", "Strike")
+        val secretRarityId = findId("select id from rarities where code = ?", "SEC")
+        val cardSetId = insertCardSet()
+        val identityId = insertCardIdentity(
+            attributeId = strikeAttributeId,
+            cardNo = "OP05-119",
+            name = "Monkey.D.Luffy",
+            effectText = "Manga art fixture.",
+        )
+
+        insertCardIdentityTranslation(
+            identityId = identityId,
+            languageCode = "en",
+            name = "Monkey.D.Luffy",
+            effectText = "Manga art fixture.",
+            triggerText = null,
+        )
+        insertCardSetTranslation(cardSetId, "en", "ROMANCE DAWN")
+        insertCardPrinting(
+            identityId = identityId,
+            cardSetId = cardSetId,
+            rarityId = secretRarityId,
+            variantName = "OP05-119_p1",
+            isParallel = true,
+            imageUrl = "https://cdn.example.test/op05-119-p1.png",
+            detailTags = listOf("PARALLEL", "MANGA"),
+        )
+    }
+
     private fun insertCardSet(): UUID =
         insertReturningId(
             """
@@ -403,6 +452,7 @@ class CardSearchApiTests(
         isParallel: Boolean,
         imageUrl: String,
         languageCode: String = "en",
+        detailTags: List<String> = if (isParallel) listOf("PARALLEL") else emptyList(),
     ): UUID =
         insertReturningId(
             """
@@ -414,10 +464,11 @@ class CardSearchApiTests(
                 region_code,
                 variant_name,
                 is_parallel,
+                detail_tags,
                 image_url,
                 source_url
             )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             returning id
             """.trimIndent(),
             identityId,
@@ -427,6 +478,7 @@ class CardSearchApiTests(
             "global",
             variantName,
             isParallel,
+            detailTags.toTypedArray(),
             imageUrl,
             "https://onepiece-cardgame.com/cardlist/",
         )

@@ -11,6 +11,8 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 
 /**
  * 카드의 실제 인쇄본을 저장하는 JPA Entity
@@ -52,6 +54,10 @@ class CardPrinting(
 
     @Column(name = "illustration_type")
     var illustrationType: String? = null,
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "detail_tags", nullable = false, columnDefinition = "text[]")
+    var detailTags: Array<String> = emptyArray(),
 
     @Column(name = "image_url")
     var imageUrl: String? = null,
